@@ -1,0 +1,13 @@
+body{
+    font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+    background-color: lightgray
+}
+h1{
+    font: sans-serif, 'Arial Narrow Bold', impact;
+}
+h1, h2, h3, h4, h5, h6{
+    font-family: sans-serif, 'Arial Narrow Bold', impact;
+}
+a{
+    font-family: sans-serif, 'Arial Narrow Bold', impact;
+}
