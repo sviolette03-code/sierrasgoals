@@ -1,13 +1,57 @@
-body{
-    font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
-    background-color: lightgray
+body {
+    font-family: sans-serif, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+    background-color: lightgray;
+    margin: 0;
 }
-h1{
+
+h1 {
     font: sans-serif, 'Arial Narrow Bold', impact;
 }
-h1, h2, h3, h4, h5, h6{
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
     font-family: sans-serif, 'Arial Narrow Bold', impact;
 }
-a{
+
+a {
     font-family: sans-serif, 'Arial Narrow Bold', impact;
+}
+
+.navbar {
+    width: 100%;
+    background-color: lightgreen;
+    padding: 20px;
+    text-align: center;
+
+    a{
+        padding: 0 20px 0 20px;
+    }
+}
+
+.main-container {
+    background-color: lightblue; 
+    padding: 40px;
+    border: 4px solid gray;
+    margin: 20px auto;
+    width: 75%;
+}
+
+.footer {
+    background-color: lightgreen;
+    text-align: center;
+    padding: 10px;
+    position: relative
+    bottom: 0;
+    width: 100%;
+}
+
+
+.tableauPlaceholder, .timg, .tableauViz {
+    max-width: 100%;
+    height: auto;
+    text-align: center;
 }
