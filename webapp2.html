@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blue-and-Pink Shark Hopper - Final Movement Fix</title>
+    
+    <style>
+        /* Color Palette */
+        :root {
+            --dark-blue: #0A1931;        
+            --light-blue: #C6E0FF;       
+            --medium-blue: #3E8EDE;      /* Water color */
+            --deep-pink: #D81B60;        /* Main Shark/Accent color */
+            --light-pink: #FFDDEE;       /* Island color */
+            --accent-pink: #E91E63;      
+        }
+
+        /* Global Styles */
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: var(--dark-blue);
+            color: var(--light-pink);
+            min-height: 100vh;
+        }
+
+        /* Header/Score */
+        header {
+            width: 100%;
+            max-width: 600px;
+            padding: 20px 0;
+            text-align: center;
+        }
+
+        h1 {
+            color: var(--light-blue);
+            text-shadow: 2px 2px 0 var(--accent-pink);
+            margin-bottom: 10px;
+        }
+
+        #score {
+            color: var(--light-blue);
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        /* Game Container (The viewport) */
+        #game-container {
+            border: 5px solid var(--accent-pink);
+            box-shadow: 0 0 20px rgba(247, 62, 124, 0.7); 
+            overflow: hidden; 
+            width: 300px; 
+            height: 450px; 
+            position: relative;
+        }
+
+        /* Game Board (The content that scrolls) */
+        #game-board {
+            width: 100%;
+            display: flex;
+            flex-direction: column-reverse;
+            position: absolute; 
+            bottom: 0;
+            transition: transform 0.15s linear; 
+        }
+
+        .lane {
+            width: 100%;
+            height: 50px; 
+            border-top: 1px solid var(--dark-blue);
+            box-sizing: border-box;
+            position: relative; 
+            overflow: hidden; 
+        }
+
+        .water-lane {
+            background-color: var(--medium-blue);
+        }
+
+        .island-lane {
+            background-color: var(--light-pink);
+            border-bottom: 3px dashed var(--deep-pink); 
+        }
+
+        /* Obstacles (Boats) */
+        .obstacle {
+            position: absolute;
+            width: 60px; 
+            height: 40px;
+            background-color: var(--light-blue);
+            border: 2px solid var(--dark-blue);
+            border-radius: 10px 10px 0 0;
+            top: 50%;
+            transform: translateY(-50%);
+            transition: left 0.05s linear; 
+        }
+        
+        .obstacle::after {
+            content: '';
+            position: absolute;
+            width: 50%;
+            height: 50%;
+            background-color: var(--deep-pink);
+            top: 0;
+            left: 25%;
+            border-radius: 3px;
+        }
+
+        /* The Player Character (Shark) */
+        #player {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background-color: var(--deep-pink);
+            border: 2px solid var(--dark-blue);
+            border-radius: 50% 0 50% 50%;
+            z-index: 10;
+            transition: left 0.1s linear; 
+            transform: rotate(-45deg); 
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 20px;
+            color: var(--light-blue);
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Shark Hopper</h1>
+        <div id="score">Score: <span id="score-value">0</span></div>
+    </header>
+
+    <div id="game-container" tabindex="0">
+        <div id="game-board">
+            </div>
+        <div id="player"></div>
+    </div>
+
+    <footer>
+        <p>Use Arrow Keys or WASD to move! Current Lane: <span id="current-lane">0</span></p>
+    </footer>
+
+    <script>
+        const gameBoard = document.getElementById('game-board');
+        const player = document.getElementById('player');
+        const scoreValue = document.getElementById('score-value');
+        const currentLaneDisplay = document.getElementById('current-lane');
+        
+        // --- Game Constants ---
+        const LANE_HEIGHT = 50; 
+        const BOARD_WIDTH = 300; 
+        const PLAYER_SIZE = 40; 
+        const VIEWPORT_HEIGHT = 450; 
+        const TILE_SIZE = 50; 
+        const OBSTACLE_WIDTH = 60;
+        const MAX_TILE_X = (BOARD_WIDTH / TILE_SIZE) - 1; // 5
+
+        // --- Game State ---
+        let playerLaneIndex = 0; 
+        let playerTileX = Math.floor(BOARD_WIDTH / 2 / TILE_SIZE); 
+        let maxLaneReached = 0;
+        let lanes = []; 
+        let laneCount = 0; 
+        let animationInterval;
+
+        // --- Initialization and Setup ---
+
+        function getPlayerPixelX() {
+            return playerTileX * TILE_SIZE + (TILE_SIZE - PLAYER_SIZE) / 2;
+        }
+        
+        function setupPlayer() {
+            player.style.left = `${getPlayerPixelX()}px`;
+            player.style.bottom = `${(LANE_HEIGHT - PLAYER_SIZE) / 2}px`;
+        }
+
+        function createObstacle(laneDiv, direction, speed) {
+            const obstacle = document.createElement('div');
+            obstacle.className = 'obstacle';
+            
+            const startX = direction === 1 ? -OBSTACLE_WIDTH : BOARD_WIDTH;
+            obstacle.style.left = `${startX}px`;
+
+            laneDiv.appendChild(obstacle);
+            return { element: obstacle, x: startX, direction, speed };
+        }
+
+        function createLane(type) {
+            const laneDiv = document.createElement('div');
+            laneDiv.className = `lane ${type}-lane`; 
+            
+            let laneData = { type: type, element: laneDiv, obstacles: [], speed: 0, direction: 0 };
+            
+            if (type === 'water') {
+                laneData.direction = Math.random() < 0.5 ? 1 : -1; 
+                laneData.speed = Math.random() * 1.5 + 0.5; 
+                
+                for (let i = 0; i < Math.random() * 2 + 1; i++) {
+                    setTimeout(() => {
+                        laneData.obstacles.push(createObstacle(laneDiv, laneData.direction, laneData.speed));
+                    }, i * 2000 + Math.random() * 500); 
+                }
+            }
+
+            gameBoard.prepend(laneDiv); 
+            lanes.push(laneData);
+            laneCount++;
+        }
+
+        function generateInitialLanes() {
+            gameBoard.innerHTML = ''; 
+            lanes = [];
+            laneCount = 0;
+            
+            createLane('island'); 
+            
+            while (laneCount * LANE_HEIGHT < VIEWPORT_HEIGHT * 2) { 
+                generateRandomLane();
+            }
+        }
+
+        function generateRandomLane() {
+            const types = ['island', 'water', 'water', 'water', 'island', 'water'];
+            const randomType = types[Math.floor(Math.random() * types.length)];
+            createLane(randomType);
+        }
+
+        // --- Core Game Loop and Mechanics ---
+
+        function updatePlayerPosition() {
+            // 1. Update Player's visual X position
+            player.style.left = `${getPlayerPixelX()}px`;
+            
+            // 2. Update Score
+            if (playerLaneIndex > maxLaneReached) {
+                maxLaneReached = playerLaneIndex;
+                scoreValue.textContent = maxLaneReached;
+                generateRandomLane();
+            }
+            
+            // 3. SCROLL THE BOARD: Always scroll the board based on the current player depth.
+            // This is the CRITICAL line for the illusion of forward movement.
+            const scrollDistance = playerLaneIndex * LANE_HEIGHT;
+            gameBoard.style.transform = `translateY(${scrollDistance}px)`;
+            
+            currentLaneDisplay.textContent = playerLaneIndex;
+        }
+        
+        function animateObstacles() {
+            for (const lane of lanes) {
+                if (lane.type === 'water') {
+                    for (const obstacle of lane.obstacles) {
+                        obstacle.x += lane.direction * lane.speed;
+                        obstacle.element.style.left = `${obstacle.x}px`;
+
+                        if (lane.direction === 1 && obstacle.x > BOARD_WIDTH) { 
+                            obstacle.x = -OBSTACLE_WIDTH; 
+                        } else if (lane.direction === -1 && obstacle.x < -OBSTACLE_WIDTH) { 
+                            obstacle.x = BOARD_WIDTH; 
+                        }
+                    }
+                }
+            }
+            checkCollision(); 
+        }
+
+        function checkCollision() {
+            const playerAbsoluteX = getPlayerPixelX();
+            const laneIndexInArray = lanes.length - 1 - playerLaneIndex;
+
+            if (laneIndexInArray < 0 || laneIndexInArray >= lanes.length) return;
+            
+            const currentLaneData = lanes[laneIndexInArray];
+            
+            if (!currentLaneData || currentLaneData.type === 'island') {
+                return; 
+            }
+            
+            const playerBounds = {
+                left: playerAbsoluteX,
+                right: playerAbsoluteX + PLAYER_SIZE, 
+            };
+            
+            for (const obstacle of currentLaneData.obstacles) {
+                const obstacleBounds = {
+                    left: obstacle.x,
+                    right: obstacle.x + OBSTACLE_WIDTH, 
+                };
+
+                if (playerBounds.left < obstacleBounds.right &&
+                    playerBounds.right > obstacleBounds.left) {
+                    
+                    gameOver();
+                    return; 
+                }
+            }
+        }
+
+        function gameOver() {
+            clearInterval(animationInterval); 
+            document.removeEventListener('keydown', handleKeydown); 
+
+            alert(`Game Over! A boat hit the shark at lane ${playerLaneIndex}. Final Score: ${maxLaneReached}`);
+            location.reload(); 
+        }
+
+        // --- Event Listener ---
+        function handleKeydown(event) {
+            let moved = false;
+            
+            switch (event.key) {
+                case 'ArrowUp':
+                case 'w':
+                    // RESTORED: FORWARD/UP MOVEMENT (Moves player forward/increases score)
+                    playerLaneIndex++;
+                    moved = true;
+                    break;
+                case 'ArrowDown':
+                case 's':
+                    // RESTORED: BACKWARD/DOWN MOVEMENT (Moves player backward/decreases score)
+                    if (playerLaneIndex > 0) {
+                        playerLaneIndex--;
+                        moved = true;
+                    }
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                    if (playerTileX > 0) {
+                        playerTileX--; 
+                        moved = true;
+                    }
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    if (playerTileX < MAX_TILE_X) { 
+                        playerTileX++; 
+                        moved = true;
+                    }
+                    break;
+            }
+
+            if (moved) {
+                updatePlayerPosition();
+            }
+        }
+
+        document.addEventListener('keydown', handleKeydown);
+
+
+        // --- Start Game ---
+        generateInitialLanes();
+        setupPlayer();
+        
+        animationInterval = setInterval(animateObstacles, 1000 / 60); // 60 FPS
+        
+    </script>
+</body>
+</html>

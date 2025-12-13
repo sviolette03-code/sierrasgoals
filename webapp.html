@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shark Hunter 3D (Fixed)</title>
+    <style>
+        /* Make background dark gray so we know the file opened, even if canvas fails */
+        body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Courier New', Courier, monospace; }
+        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        /* UI Layer - Z-INDEX INCREASED TO 100 TO SIT ABOVE EVERYTHING */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+            z-index: 100; /* Critical Fix */
+        }
+
+        #score-board {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            display: none;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        /* Start Screen */
+        #start-screen {
+            background: rgba(0, 10, 30, 0.85);
+            padding: 40px;
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+            pointer-events: auto;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+        }
+        
+        button {
+            background: #00ffff;
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            font-size: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+        button:hover { background: #fff; transform: scale(1.05); }
+
+        /* Cinematic Elements */
+        #black-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: black;
+            opacity: 0;
+            transition: opacity 1s;
+            pointer-events: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+
+        #countdown {
+            font-size: 100px;
+            color: white;
+            display: none;
+        }
+
+        /* Eyelids */
+        .eyelid {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            background: black;
+            z-index: 40;
+            transition: height 1s ease-in-out;
+        }
+        #eyelid-top { top: 0; }
+        #eyelid-bottom { bottom: 0; }
+
+        .eyes-open #eyelid-top { height: 0%; }
+        .eyes-open #eyelid-bottom { height: 0%; }
+        
+        /* Win Screen */
+        #win-screen {
+            display: none;
+            background: rgba(0, 50, 0, 0.9);
+            padding: 50px;
+            border: 3px solid #00ff00;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div id="score-board">FISH EATEN: <span id="score">0</span>/20</div>
+
+        <div id="start-screen">
+            <h1>SHARK TANK 3D</h1>
+            <p>You are the shark.</p>
+            <p>Eat 20 fish to escape.</p>
+            <p style="font-size: 14px; opacity: 0.8;">Controls: Arrow Keys to turn &bull; SPACE to boost</p>
+            <button id="start-btn">Start Swimming</button>
+        </div>
+
+        <div id="win-screen">
+            <h1>HUNGER SATISFIED!</h1>
+            <p>You ate all the fish.</p>
+            <button onclick="location.reload()">Play Again</button>
+        </div>
+    </div>
+
+    <div id="black-overlay">
+        <div id="countdown">3</div>
+    </div>
+    <div id="eyelid-top" class="eyelid"></div>
+    <div id="eyelid-bottom" class="eyelid"></div>
+
+    <div id="canvas-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="alert('Error: Three.js could not load. Check your internet connection.')"></script>
+
+    <script>
+        // --- GAME CONFIGURATION ---
+        const CUBE_SIZE = 200;
+        const WIN_SCORE = 20;
+        const FISH_SIZE = 3;
+        const SHARK_SPEED_NORMAL = 0.8;
+        const SHARK_SPEED_BOOST = 2.5;
+        const TURN_SPEED = 0.04;
+        
+        // --- VARIABLES ---
+        let scene, camera, renderer;
+        let cubeBoundary, fishMesh, dummyShark;
+        let score = 0;
+        let gameState = 'MENU'; 
+        let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, " ": false };
+        
+        // --- INITIALIZATION ---
+        function init() {
+            if (typeof THREE === 'undefined') {
+                alert("Three.js library failed to load. Please refresh or check connection.");
+                return;
+            }
+
+            // Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x001e36); 
+            scene.fog = new THREE.FogExp2(0x001e36, 0.006);
+
+            // Renderer
+            try {
+                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                document.getElementById('canvas-container').appendChild(renderer.domElement);
+            } catch (e) {
+                alert("WebGL failed. Your browser may not support 3D.");
+                return;
+            }
+
+            // Camera (Initially in 3rd person looking at the box)
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(200, 150, 200);
+            camera.lookAt(0, 0, 0);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 2);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(50, 100, 50);
+            scene.add(dirLight);
+
+            // The Cube Boundary
+            const geometry = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
+            const edges = new THREE.EdgesGeometry(geometry);
+            cubeBoundary = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ffff }));
+            scene.add(cubeBoundary);
+
+            // The "Dummy" Shark (Visible only in Menu)
+            const sharkGeo = new THREE.ConeGeometry(5, 15, 8);
+            sharkGeo.rotateX(Math.PI / 2); 
+            const sharkMat = new THREE.MeshPhongMaterial({ color: 0x6699ff });
+            dummyShark = new THREE.Mesh(sharkGeo, sharkMat);
+            scene.add(dummyShark);
+
+            // The Fish
+            spawnFish();
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('keydown', (e) => keys[e.key] = true);
+            document.addEventListener('keyup', (e) => keys[e.key] = false);
+            document.getElementById('start-btn').addEventListener('click', startSequence);
+
+            animate();
+        }
+
+        // --- GAME LOGIC ---
+
+        function spawnFish() {
+            if (fishMesh) scene.remove(fishMesh);
+            
+            const geometry = new THREE.SphereGeometry(FISH_SIZE, 16, 16);
+            const material = new THREE.MeshPhongMaterial({ color: 0xffa500, emissive: 0xff0000, emissiveIntensity: 0.5 });
+            fishMesh = new THREE.Mesh(geometry, material);
+            
+            // Random position inside cube
+            const limit = (CUBE_SIZE / 2) - 10;
+            fishMesh.position.set(
+                (Math.random() - 0.5) * 2 * limit,
+                (Math.random() - 0.5) * 2 * limit,
+                (Math.random() - 0.5) * 2 * limit
+            );
+            
+            scene.add(fishMesh);
+        }
+
+        function startSequence() {
+            if (gameState !== 'MENU') return;
+            gameState = 'TRANSITION';
+            
+            // Hide menu
+            document.getElementById('start-screen').style.display = 'none';
+            
+            // Fade to black
+            const overlay = document.getElementById('black-overlay');
+            const countdownEl = document.getElementById('countdown');
+            overlay.style.opacity = 1;
+
+            // Wait 1s, then countdown
+            setTimeout(() => {
+                countdownEl.style.display = 'block';
+                let count = 3;
+                countdownEl.innerText = count;
+                
+                const timer = setInterval(() => {
+                    count--;
+                    if (count > 0) {
+                        countdownEl.innerText = count;
+                    } else {
+                        clearInterval(timer);
+                        countdownEl.style.display = 'none';
+                        enterFirstPerson();
+                    }
+                }, 1000);
+
+            }, 1000);
+        }
+
+        function enterFirstPerson() {
+            scene.remove(dummyShark); // Remove the prop shark
+
+            // Move camera to center
+            camera.position.set(0, 0, 0);
+            camera.rotation.set(0, 0, 0); 
+            
+            // Remove black overlay so we see the eyelids
+            document.getElementById('black-overlay').style.opacity = 0;
+
+            // Trigger Eyelid Animation (Open Eyes)
+            document.body.classList.add('eyes-open');
+            document.getElementById('score-board').style.display = 'block';
+
+            gameState = 'PLAYING';
+        }
+
+        function updateMovement() {
+            if (gameState !== 'PLAYING') return;
+
+            const speed = keys[" "] ? SHARK_SPEED_BOOST : SHARK_SPEED_NORMAL;
+
+            // Simple flying controls
+            if (keys.ArrowUp) camera.rotateX(TURN_SPEED);
+            if (keys.ArrowDown) camera.rotateX(-TURN_SPEED);
+            if (keys.ArrowLeft) camera.rotateY(TURN_SPEED);
+            if (keys.ArrowRight) camera.rotateY(-TURN_SPEED);
+
+            // Move forward
+            camera.translateZ(-speed);
+
+            // Boundary Check
+            const limit = CUBE_SIZE / 2;
+            ['x', 'y', 'z'].forEach(axis => {
+                if (camera.position[axis] > limit) camera.position[axis] = limit;
+                if (camera.position[axis] < -limit) camera.position[axis] = -limit;
+            });
+
+            // Eat Fish
+            if (camera.position.distanceTo(fishMesh.position) < FISH_SIZE + 8) {
+                eatFish();
+            }
+        }
+
+        function eatFish() {
+            score++;
+            document.getElementById('score').innerText = score;
+            if (score >= WIN_SCORE) winGame();
+            else spawnFish();
+        }
+
+        function winGame() {
+            gameState = 'END';
+            document.getElementById('win-screen').style.display = 'block';
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (gameState === 'MENU') {
+                // Spin around the cube
+                const time = Date.now() * 0.0005;
+                camera.position.x = Math.sin(time) * 300;
+                camera.position.z = Math.cos(time) * 300;
+                camera.lookAt(0, 0, 0);
+            } else if (gameState === 'PLAYING') {
+                updateMovement();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Start
+        init();
+
+    </script>
+</body>
+</html>
