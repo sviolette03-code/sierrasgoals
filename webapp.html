@@ -1,18 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shark Hunter 3D (Fixed)</title>
     <style>
         /* Make background dark gray so we know the file opened, even if canvas fails */
-        body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Courier New', Courier, monospace; }
-        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
-        
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #222;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
         /* UI Layer - Z-INDEX INCREASED TO 100 TO SIT ABOVE EVERYTHING */
         #ui-layer {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             pointer-events: none;
             display: flex;
             flex-direction: column;
@@ -20,7 +36,8 @@
             align-items: center;
             color: white;
             text-align: center;
-            z-index: 100; /* Critical Fix */
+            z-index: 100;
+            /* Critical Fix */
         }
 
         #score-board {
@@ -43,7 +60,7 @@
             backdrop-filter: blur(5px);
             box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
         }
-        
+
         button {
             background: #00ffff;
             color: #000;
@@ -56,12 +73,19 @@
             margin-top: 20px;
             transition: transform 0.2s;
         }
-        button:hover { background: #fff; transform: scale(1.05); }
+
+        button:hover {
+            background: #fff;
+            transform: scale(1.05);
+        }
 
         /* Cinematic Elements */
         #black-overlay {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             background: black;
             opacity: 0;
             transition: opacity 1s;
@@ -88,12 +112,23 @@
             z-index: 40;
             transition: height 1s ease-in-out;
         }
-        #eyelid-top { top: 0; }
-        #eyelid-bottom { bottom: 0; }
 
-        .eyes-open #eyelid-top { height: 0%; }
-        .eyes-open #eyelid-bottom { height: 0%; }
-        
+        #eyelid-top {
+            top: 0;
+        }
+
+        #eyelid-bottom {
+            bottom: 0;
+        }
+
+        .eyes-open #eyelid-top {
+            height: 0%;
+        }
+
+        .eyes-open #eyelid-bottom {
+            height: 0%;
+        }
+
         /* Win Screen */
         #win-screen {
             display: none;
@@ -104,8 +139,8 @@
         }
     </style>
 </head>
-<body>
 
+<body>
     <div id="ui-layer">
         <div id="score-board">FISH EATEN: <span id="score">0</span>/20</div>
 
@@ -132,7 +167,8 @@
 
     <div id="canvas-container"></div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="alert('Error: Three.js could not load. Check your internet connection.')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+        onerror="alert('Error: Three.js could not load. Check your internet connection.')"></script>
 
     <script>
         // --- GAME CONFIGURATION ---
@@ -142,14 +178,14 @@
         const SHARK_SPEED_NORMAL = 0.8;
         const SHARK_SPEED_BOOST = 2.5;
         const TURN_SPEED = 0.04;
-        
+
         // --- VARIABLES ---
         let scene, camera, renderer;
         let cubeBoundary, fishMesh, dummyShark;
         let score = 0;
-        let gameState = 'MENU'; 
+        let gameState = 'MENU';
         let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, " ": false };
-        
+
         // --- INITIALIZATION ---
         function init() {
             if (typeof THREE === 'undefined') {
@@ -159,7 +195,7 @@
 
             // Scene Setup
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x001e36); 
+            scene.background = new THREE.Color(0x001e36);
             scene.fog = new THREE.FogExp2(0x001e36, 0.006);
 
             // Renderer
@@ -192,7 +228,7 @@
 
             // The "Dummy" Shark (Visible only in Menu)
             const sharkGeo = new THREE.ConeGeometry(5, 15, 8);
-            sharkGeo.rotateX(Math.PI / 2); 
+            sharkGeo.rotateX(Math.PI / 2);
             const sharkMat = new THREE.MeshPhongMaterial({ color: 0x6699ff });
             dummyShark = new THREE.Mesh(sharkGeo, sharkMat);
             scene.add(dummyShark);
@@ -213,11 +249,11 @@
 
         function spawnFish() {
             if (fishMesh) scene.remove(fishMesh);
-            
+
             const geometry = new THREE.SphereGeometry(FISH_SIZE, 16, 16);
             const material = new THREE.MeshPhongMaterial({ color: 0xffa500, emissive: 0xff0000, emissiveIntensity: 0.5 });
             fishMesh = new THREE.Mesh(geometry, material);
-            
+
             // Random position inside cube
             const limit = (CUBE_SIZE / 2) - 10;
             fishMesh.position.set(
@@ -225,17 +261,17 @@
                 (Math.random() - 0.5) * 2 * limit,
                 (Math.random() - 0.5) * 2 * limit
             );
-            
+
             scene.add(fishMesh);
         }
 
         function startSequence() {
             if (gameState !== 'MENU') return;
             gameState = 'TRANSITION';
-            
+
             // Hide menu
             document.getElementById('start-screen').style.display = 'none';
-            
+
             // Fade to black
             const overlay = document.getElementById('black-overlay');
             const countdownEl = document.getElementById('countdown');
@@ -246,7 +282,7 @@
                 countdownEl.style.display = 'block';
                 let count = 3;
                 countdownEl.innerText = count;
-                
+
                 const timer = setInterval(() => {
                     count--;
                     if (count > 0) {
@@ -266,8 +302,8 @@
 
             // Move camera to center
             camera.position.set(0, 0, 0);
-            camera.rotation.set(0, 0, 0); 
-            
+            camera.rotation.set(0, 0, 0);
+
             // Remove black overlay so we see the eyelids
             document.getElementById('black-overlay').style.opacity = 0;
 
@@ -344,4 +380,5 @@
 
     </script>
 </body>
+
 </html>
